@@ -1,0 +1,18 @@
+branches:
+  only:
+  - master
+notifications:
+  email:
+    on_success: never
+    on_failure: always
+sudo: required
+services:
+- docker
+before_install:
+- docker pull fedora:23
+before_script:
+- docker run -i --privileged -d -v $HOME/build/$TRAVIS_REPO_SLUG:/dnf/ --name test_fedora fedora:23 bash
+- docker exec -i test_fedora bash -c "dnf install -y 'dnf-command(repoquery)'"
+script:
+- ci/test.sh
+
