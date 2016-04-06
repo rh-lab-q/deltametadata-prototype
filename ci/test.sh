@@ -18,4 +18,11 @@ fi
 
 echo "Commit range: $COMMIT_RANGE"
 
+echo "Copare output from repoquery"
+
+docker exec -i test_fedora bash -c "dnf repoquery -q --releasever=23 --disablerepo=\* --enablerepo=updates > /dnf/deltametadata_pkgs.txt"
+docker exec -i test_fedora bash -c "dnf repoquery -q --disableplugin zsync --disablerepo=\* --enablerepo=updates --releasever=23 > /dnf/updates_pkgs.txt"
+diff /dnf/deltametadata_pkgs.txt /dnf/updates_pkgs.txt
+STATUS_ALL=$?
+
 exit $STATUS_ALL

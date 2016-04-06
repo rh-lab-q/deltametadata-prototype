@@ -13,6 +13,7 @@ before_install:
 before_script:
 - docker run -i --privileged -d -v $HOME/build/$TRAVIS_REPO_SLUG:/dnf/ --name test_fedora fedora:23 bash
 - docker exec -i test_fedora bash -c "dnf install -y 'dnf-command(repoquery)'"
+- docker exec -i test_fedora bash -c "cd /dnf/client/; make install"
 script:
 - ci/test.sh
 
