@@ -6,15 +6,15 @@ local_path="${repo_path}local/"
 backup_path="${repo_path}backup/"
 repodata_url="http://fr2.rpmfind.net/linux/fedora/linux/updates/23/x86_64/repodata/"
 
-#if [ $minute != 30 ]; then
-#    exit
-#fi
+#continue every 30 minutes
+if [ $minute != 30 ]; then
+    exit
+fi
 
 #synchronize
 function sync {
 
-    #backup only if there is something to backup
-
+   #backup only if there is something to backup
    if [ "$(ls -A ${local_path})" ]; then
         date=$(date +%Y-%m-%d)
         #check current date directory
@@ -27,15 +27,18 @@ function sync {
         fi
 
         mkdir "${backup_path}${date}/${dir_num}"
+    printf "Creating backup\n"
         mv ${local_path}* "${backup_path}${date}/${dir_num}"
     fi
 
     #download new data
-    curl --silent -o $local_filelists $remote_filelists
-    gzip -d $local_filelists
-    curl --silent -o $local_primary $remote_primary
-    gzip -d $local_primary
+    printf "Downloading and unpacking filelists.xml.gz and primary.xml.gz\n"
+    curl --silent -o ${local_path}${filelists_file} $remote_filelists
+    curl --silent -o ${local_path}${primary_file} $remote_primary
+    gzip -d ${local_path}*
+    printf "Repacking with rsyncable\n"
     gzip --rsyncable ${local_path}*
+    printf "Downloading repomd.xml"
     curl --silent -o "${local_path}repomd.xml" $remote_repomd
 }
 
@@ -43,14 +46,14 @@ function sync {
 filelists_file=$(curl -s ${repodata_url} --list-only | sed -n 's/.*href="\([^"]*filelists.xml.gz\).*/\1/p')
 primary_file=$(curl -s ${repodata_url} --list-only | sed -n 's/.*href="\([^"]*primary.xml.gz\).*/\1/p')
 
-remote_filelists="${repodata_url}${filelists_file}"
-remote_primary="${repodata_url}${primary_file}"
-remote_repomd="${repodata_url}repomd.xml"
+remote_filelists=${repodata_url}${filelists_file}
+remote_primary=${repodata_url}${primary_file}
+remote_repomd=${repodata_url}repomd.xml
 
 #local files
-local_filelists="${local_path}${filelists_file}"
-local_primary="${local_path}${primary_file}"
-local_repomd="${local_path}repomd.xml"
+local_filelists=${local_path}$(ls $local_path | grep "filelists.xml.gz")
+local_primary=${local_path}$(ls $local_path | grep "primary.xml.gz")
+local_repomd=${local_path}repomd.xml
 
 #check if files exist
 [ ! "$(ls -A ${local_path})" ] && sync
