@@ -1,7 +1,9 @@
 #!/bin/bash
 minute=$(date '+%M')
 
-repo_path="/var/lib/openshift/56fbf20c2d527133cb00022a/app-root/repo/"
+home_dir="/var/lib/openshift/56fbf20c2d527133cb00022a/"
+repo_path="${home_dir}app-root/repo/"
+zsyncmake="${home_dir}httpd/opt/zsync-0.6.2/zsyncmake"
 local_path="${repo_path}local/"
 backup_path="${repo_path}backup/"
 repodata_url="http://fr2.rpmfind.net/linux/fedora/linux/updates/23/x86_64/repodata/"
@@ -23,11 +25,11 @@ function sync {
             dir_num="0"
         else
             dir_num=$(ls -v | tail -n 1)
-            (($dir_num++))
+            $((++dir_num))
         fi
 
         mkdir "${backup_path}${date}/${dir_num}"
-    printf "Creating backup\n"
+        printf "Creating backup\n"
         mv ${local_path}* "${backup_path}${date}/${dir_num}"
     fi
 
@@ -38,8 +40,15 @@ function sync {
     gzip -d ${local_path}*
     printf "Repacking with rsyncable\n"
     gzip --rsyncable ${local_path}*
-    printf "Downloading repomd.xml"
+    printf "Downloading repomd.xml\n"
     curl --silent -o "${local_path}repomd.xml" $remote_repomd
+    printf "Creating zsync files\n"
+    pushd ${local_path} >/dev/null 2>&1
+    for f in *.gz; do
+        printf "| Processing ${f} ...\n"
+        ${zsyncmake} -e ${f} 2>/dev/null
+    done
+    popd >/dev/null 2>&1
 }
 
 #remote files that are to be synchronized
