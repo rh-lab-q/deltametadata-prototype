@@ -24,7 +24,8 @@ class PluginImpl(object):
         try:
             with open(cache_dir + "/repomd.xml", "r") as repomd:
                 return repomd.read()
-        except: pass
+        except:
+            pass
 
     def repodata_base_name(self, s):
         " strips hash like this: [0-9a-f]+-(.+) -> \1 "
@@ -40,7 +41,8 @@ class PluginImpl(object):
                 r")\"",
                 repomd
             ).group(1)
-        else: return file_name
+        else:
+            return file_name
 
     def sync_metadata(self, cache_dir):
         def iter_repodata(repomd):
