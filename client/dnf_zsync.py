@@ -31,8 +31,6 @@ class PluginImpl(object):
         " strips hash like this: [0-9a-f]+-(.+) -> \1 "
         return s.split('-')[1]
 
-    REPODATA_EXTS = r'\.(?:gz)'
-
     def get_input_name(self, repomd, file_name):
         if repomd:
             return re.search(
@@ -47,8 +45,7 @@ class PluginImpl(object):
     def sync_metadata(self, cache_dir):
         def iter_repodata(repomd):
             return re.finditer(
-                r'<location href=\"repodata/(.*)(' +
-                self.REPODATA_EXTS + r')\"',
+                r'<location href=\"repodata/(.*)(\.(?:gz))\"',
                 repomd
             )
 
