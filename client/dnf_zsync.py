@@ -10,6 +10,7 @@ class PluginImpl(object):
 
     def __init__(self, mtdt_url, print_log=False):
         self.mtdt_url = mtdt_url
+        self._cache_dir = None
         self._print_log = print_log
 
     def download_repomd(self):
@@ -19,10 +20,10 @@ class PluginImpl(object):
                 'wget', self.mtdt_url + 'repomd.xml', '-O-'
             ], stderr=FNULL).decode('utf-8')
 
-    def load_local_repomd(self, cache_dir):
+    def load_local_repomd(self):
         " return None if cache_dir/repomd.xml was not found "
         try:
-            with open(cache_dir + '/repomd.xml', 'r') as repomd:
+            with open(self._cache_dir + '/repomd.xml', 'r') as repomd:
                 return repomd.read()
         except:
             pass
@@ -48,11 +49,13 @@ class PluginImpl(object):
                 r'<location href=\"repodata/(.*)(\.(?:gz))\"',
                 repomd
             )
+
+        self._cache_dir = cache_dir
         if not os.path.exists(cache_dir):
                 os.makedirs(cache_dir)
 
         repomd = self.download_repomd()
-        local_repomd = self.load_local_repomd(cache_dir)
+        local_repomd = self.load_local_repomd()
         for loc in iter_repodata(repomd):
             file_name = loc.group(1)
             input_name = self.get_input_name(
