@@ -48,6 +48,8 @@ class PluginImpl(object):
                 r'<location href=\"repodata/(.*)(\.(?:gz))\"',
                 repomd
             )
+        if not os.path.exists(cache_dir):
+                os.makedirs(cache_dir)
 
         repomd = self.download_repomd()
         local_repomd = self.load_local_repomd(cache_dir)
