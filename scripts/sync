@@ -1,0 +1,13 @@
+#!/bin/bash
+minute=$(date '+%M')
+
+repo_path="/var/lib/openshift/56fbf20c2d527133cb00022a/app-root/repo/"
+script_path=${repo_path}"scripts/"
+logs=${repo_path}"logs/log.txt"
+
+#continue every 30 minutes
+if [ $minute != 30 ]; then
+    exit
+fi
+
+${script_path}"sync.sh" >>$logs 2>&1
