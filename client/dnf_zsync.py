@@ -1,7 +1,7 @@
 import os.path
 import os
 import re
-from subprocess import PIPE, CalledProcessError, Popen, check_output
+from subprocess import PIPE, DEVNULL, CalledProcessError, Popen, check_output, check_call
 
 import dnf
 
@@ -23,7 +23,7 @@ class PluginImpl(object):
     def load_local_repomd(self):
         " return None if cache_dir/repomd.xml was not found "
         try:
-            with open(self._cache_dir + '/repomd.xml', 'r') as repomd:
+            with open(self._cache_dir + '/repodata/repomd.xml', 'r') as repomd:
                 return repomd.read()
         except:
             pass
@@ -36,37 +36,62 @@ class PluginImpl(object):
         if repomd:
             return re.search(
                 r'<location href=\"repodata/(.*' +
-                self.repodata_base_name(file_name) +
-                r')\"',
+                file_name + r')\"',
                 repomd
             ).group(1)
         else:
             return file_name
 
-    def sync_metadata(self, cache_dir):
-        def iter_repodata(repomd):
-            return re.finditer(
-                r'<location href=\"repodata/(.*)(\.(?:gz))\"',
-                repomd
-            )
+    def download_wget_file(self, file):
+        check_call(["wget", self.mtdt_url + file, "-O", self._cache_dir +
+                    "/repodata/" + file], stdout=DEVNULL, stderr=DEVNULL)
 
+    def save_repomd(self, repomd):
+        with open(self._cache_dir + '/repodata/repomd.xml', 'w') as repomd_f:
+            repomd_f.write(repomd)
+
+    def download_all_files(self, repomd):
+        filelist = ['comps.*\.xz', 'updateinfo\.xml\.xz', 'primary\.xml\.gz',
+                    'prestodelta\.xml\.xz', 'filelists\.xml\.gz']
+        for file in filelist:
+            self.download_wget_file(self.get_input_name(repomd, file))
+
+    def remove_file_ext(self, file_name):
+        return file_name[:file_name.rfind('.')]
+
+    def sync_metadata(self, cache_dir):
+        wget_download = ['comps.*\.xz', 'updateinfo\.xml\.xz',
+                         'prestodelta\.xml\.xz']
+        zsync_download = ['primary\.xml\.gz', 'filelists\.xml\.gz']
         self._cache_dir = cache_dir
+        repomd = self.download_repomd()
+
         if not os.path.exists(cache_dir):
                 os.makedirs(cache_dir)
-
-        repomd = self.download_repomd()
+                os.makedirs(cache_dir + "/repodata")
+                self.download_all_files(repomd)
+                self.save_repomd(repomd)
+                return
         local_repomd = self.load_local_repomd()
-        for loc in iter_repodata(repomd):
-            file_name = loc.group(1)
-            input_name = self.get_input_name(
-                local_repomd, file_name + loc.group(2))
-            self._sync(
-                self.mtdt_url + file_name + '.zsync',
-                cache_dir + '/repodata/' + input_name,
-                cache_dir + '/repodata/' + file_name + loc.group(2)
-            )
-        with open(cache_dir + '/repomd.xml', 'w') as repomd_f:
-            repomd_f.write(repomd)
+
+        for file in wget_download:
+            new_file = self.get_input_name(repomd, file)
+            old_file = self.get_input_name(local_repomd, file)
+            if new_file.find(old_file) != 0:
+                os.remove(cache_dir + "/repodata/" + old_file)
+                self.download_wget_file(new_file)
+
+        for file in zsync_download:
+            new_file = self.get_input_name(repomd, file)
+            old_file = self.get_input_name(local_repomd, file)
+            if new_file.find(old_file) != 0:
+                self._sync(
+                    self.mtdt_url + self.remove_file_ext(new_file) + '.zsync',
+                    cache_dir + '/repodata/' + old_file,
+                    cache_dir + '/repodata/' + new_file
+                )
+
+            self.save_repomd(repomd)
 
     def _sync(self, url, input_file, target):
         " this is exception safe (unless something unexpected will happen) "
