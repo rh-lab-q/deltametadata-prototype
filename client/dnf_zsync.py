@@ -12,6 +12,9 @@ class PluginImpl(object):
         self.mtdt_url = mtdt_url
         self._cache_dir = None
         self._print_log = print_log
+        self.wget_download = ['comps.*\.xz', 'updateinfo\.xml\.xz',
+                              'prestodelta\.xml\.xz']
+        self.zsync_download = ['primary\.xml\.gz', 'filelists\.xml\.gz']
 
     def download_repomd(self):
         " May throw if repomd.xml does not exists at server "
@@ -43,45 +46,40 @@ class PluginImpl(object):
             return file_name
 
     def download_wget_file(self, file):
-        check_call(["wget", self.mtdt_url + file, "-O", self._cache_dir +
-                    "/repodata/" + file], stdout=DEVNULL, stderr=DEVNULL)
+        check_call(['wget', self.mtdt_url + file, '-O', self._cache_dir +
+                    '/repodata/' + file], stdout=DEVNULL, stderr=DEVNULL)
 
     def save_repomd(self, repomd):
         with open(self._cache_dir + '/repodata/repomd.xml', 'w') as repomd_f:
             repomd_f.write(repomd)
 
-    def download_all_files(self, repomd):
-        filelist = ['comps.*\.xz', 'updateinfo\.xml\.xz', 'primary\.xml\.gz',
-                    'prestodelta\.xml\.xz', 'filelists\.xml\.gz']
-        for file in filelist:
-            self.download_wget_file(self.get_input_name(repomd, file))
-
     def remove_file_ext(self, file_name):
         return file_name[:file_name.rfind('.')]
 
     def sync_metadata(self, cache_dir):
-        wget_download = ['comps.*\.xz', 'updateinfo\.xml\.xz',
-                         'prestodelta\.xml\.xz']
-        zsync_download = ['primary\.xml\.gz', 'filelists\.xml\.gz']
         self._cache_dir = cache_dir
         repomd = self.download_repomd()
 
         if not os.path.exists(cache_dir):
                 os.makedirs(cache_dir)
-                os.makedirs(cache_dir + "/repodata")
-                self.download_all_files(repomd)
+                os.makedirs(cache_dir + '/repodata')
+                for file in self.wget_download:
+                    self.download_wget_file(self.get_input_name(repomd, file))
+                for file in self.zsync_download:
+                    self.download_wget_file(self.get_input_name(repomd, file))
                 self.save_repomd(repomd)
                 return
         local_repomd = self.load_local_repomd()
 
-        for file in wget_download:
+        for file in self.wget_download:
             new_file = self.get_input_name(repomd, file)
             old_file = self.get_input_name(local_repomd, file)
             if new_file.find(old_file) != 0:
-                os.remove(cache_dir + "/repodata/" + old_file)
+                if (os.path.isfile(cache_dir + '/repodata/' + old_file)):
+                    os.remove(cache_dir + '/repodata/' + old_file)
                 self.download_wget_file(new_file)
 
-        for file in zsync_download:
+        for file in self.zsync_download:
             new_file = self.get_input_name(repomd, file)
             old_file = self.get_input_name(local_repomd, file)
             if new_file.find(old_file) != 0:
