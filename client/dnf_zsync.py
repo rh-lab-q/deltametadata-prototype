@@ -1,17 +1,17 @@
-import os.path
 import os
 import re
 from subprocess import PIPE, DEVNULL, CalledProcessError, Popen, check_output, check_call
-
 import dnf
+import logging
+
+logger = logging.getLogger("dnf")
 
 
 class PluginImpl(object):
 
-    def __init__(self, mtdt_url, print_log=False):
+    def __init__(self, mtdt_url):
         self.mtdt_url = mtdt_url
         self._cache_dir = None
-        self._print_log = print_log
         self.wget_download = ['comps.*\.xz', 'updateinfo\.xml\.xz',
                               'prestodelta\.xml\.xz']
         self.zsync_download = ['primary\.xml\.gz', 'filelists\.xml\.gz']
@@ -46,8 +46,11 @@ class PluginImpl(object):
             return file_name
 
     def download_wget_file(self, file):
-        check_call(['wget', self.mtdt_url + file, '-O', self._cache_dir +
-                    '/repodata/' + file], stdout=DEVNULL, stderr=DEVNULL)
+        try:
+            check_call(['wget', self.mtdt_url + file, '-O', self._cache_dir +
+                        '/repodata/' + file], stdout=DEVNULL, stderr=DEVNULL)
+        except CalledProcessError as ex:
+            logger.debug(str(ex))
 
     def save_repomd(self, repomd):
         with open(self._cache_dir + '/repodata/repomd.xml', 'w') as repomd_f:
@@ -70,6 +73,7 @@ class PluginImpl(object):
                 self.save_repomd(repomd)
                 return
         local_repomd = self.load_local_repomd()
+        os.chdir(cache_dir + '/repodata')
 
         for file in self.wget_download:
             new_file = self.get_input_name(repomd, file)
@@ -89,7 +93,7 @@ class PluginImpl(object):
                     cache_dir + '/repodata/' + new_file
                 )
 
-            self.save_repomd(repomd)
+        self.save_repomd(repomd)
 
     def _sync(self, url, input_file, target):
         " this is exception safe (unless something unexpected will happen) "
@@ -100,11 +104,11 @@ class PluginImpl(object):
             zsync = Popen(['zsync', url, '-i', input_file, '-o',
                            target], stdout=PIPE, stderr=PIPE)
             outputs = zsync.communicate()
-            if self._print_log:
-                print(outputs[1].decode('utf-8'))
-                print(outputs[0].decode('utf-8'))
+            if zsync.returncode:
+                logger.debug(outputs[1].decode('utf-8'))
+                logger.debug(outputs[0].decode('utf-8'))
         except CalledProcessError as ex:
-            # print(str(ex), file=sys.stderr)
+            logger.debug(str(ex))
             # reverse rewriting existing if there was any
             try:
                 check_output(['mv', target + '.zs-old', target])
