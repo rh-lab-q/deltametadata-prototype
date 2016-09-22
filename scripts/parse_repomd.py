@@ -17,8 +17,8 @@ def read_timestamp(root):
             tmp = node.getElementsByTagName('checksum')[0]
             result['download_p'] = tmp.firstChild.data + '-primary.xml.gz'
         elif node.getAttribute('type') == 'group_gz':
-            tmp = node.getElementsByTagName('checksum')[0]
-            result['download_g'] = tmp.firstChild.data + '-comps-f23.xml.xz'
+            tmp = node.getElementsByTagName('location')[0]
+            result['download_g'] = tmp.getAttribute('href').split('/', 1)[1]
         elif node.getAttribute('type') == 'updateinfo':
             tmp = node.getElementsByTagName('checksum')[0]
             result['download_u'] = tmp.firstChild.data + '-updateinfo.xml.xz'
