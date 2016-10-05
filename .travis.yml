@@ -12,8 +12,12 @@ before_install:
 - docker pull fedora:23
 before_script:
 - docker run -i --privileged -d -v $HOME/build/$TRAVIS_REPO_SLUG:/dnf/ --name test_fedora fedora:23 bash
-- docker exec -i test_fedora bash -c "dnf install -y 'dnf-command(repoquery)'"
-- docker exec -i test_fedora bash -c "cd /dnf/client/; make install"
+- docker exec -i test_fedora bash -c "dnf install -y 'dnf-command(repoquery)' wget tar make bzip2 gcc python xz"
+- docker exec -i test_fedora bash -c "cd /tmp; wget http://zsync.moria.org.uk/download/zsync-0.6.2.tar.bz2; tar xvjf zsync*"
+- docker exec -i test_fedora bash -c "cd /tmp/zsync*; ./configure; make; make install"
+- docker exec -i test_fedora bash -c "cp /dnf/client/dnf_zsync.py /usr/lib/python3.4/site-packages/dnf-plugins/"
+- docker exec -i test_fedora bash -c "cd /tmp; wget http://dmd-deltametadata.rhcloud.com/cache/cache.tar.xz"
+- docker exec -i test_fedora bash -c "cd /var/cache/dnf/updates-*/repodata; rm -rf *; tar xfv /tmp/cache.tar.xz;"
 script:
 - ci/test.sh
 
