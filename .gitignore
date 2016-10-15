@@ -1,0 +1,4 @@
+# Gnuplot data
+**/*.log
+**/*.png
+**/*.dat
