@@ -9,9 +9,10 @@ logger = logging.getLogger("dnf")
 
 class PluginImpl(object):
 
-    def __init__(self, mtdt_url):
+    def __init__(self, mtdt_url, print_log = False):
         self.mtdt_url = mtdt_url
         self._cache_dir = None
+        self.print_log = print_log
         self.wget_download = ['comps.*\.xz', 'updateinfo\.xml\.xz',
                               'prestodelta\.xml\.xz']
         self.zsync_download = ['primary\.xml\.gz', 'filelists\.xml\.gz']
@@ -104,7 +105,7 @@ class PluginImpl(object):
             zsync = Popen(['zsync', url, '-i', input_file, '-o',
                            target], stdout=PIPE, stderr=PIPE)
             outputs = zsync.communicate()
-            if zsync.returncode:
+            if zsync.returncode or self.print_log:
                 logger.debug(outputs[1].decode('utf-8'))
                 logger.debug(outputs[0].decode('utf-8'))
         except CalledProcessError as ex:
