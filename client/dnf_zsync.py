@@ -74,6 +74,7 @@ class PluginImpl(object):
                 self.save_repomd(repomd)
                 return
         local_repomd = self.load_local_repomd()
+        cwd = os.getcwd()
         os.chdir(cache_dir + '/repodata')
 
         for file in self.wget_download:
@@ -95,6 +96,7 @@ class PluginImpl(object):
                 )
 
         self.save_repomd(repomd)
+        os.chdir(cwd)
 
     def _sync(self, url, input_file, target):
         " this is exception safe (unless something unexpected will happen) "
