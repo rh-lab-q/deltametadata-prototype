@@ -134,7 +134,7 @@ class Plugin(dnf.Plugin):
         super(Plugin, self).__init__(base, cli)
         self.cli = cli
         self.base = base
-        self.impl = PluginImpl('http://dmd-deltametadata.rhcloud.com/local/')
+        self.impl = PluginImpl('http://209.132.178.35/local/')
 
     def config(self):
         if self.cli:
