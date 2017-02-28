@@ -9,13 +9,13 @@ logger = logging.getLogger("dnf")
 
 class PluginImpl(object):
 
-    def __init__(self, mtdt_url, print_log = False):
+    def __init__(self, mtdt_url, print_log=False):
         self.mtdt_url = mtdt_url
         self._cache_dir = None
         self.print_log = print_log
-        self.wget_download = ['comps.*\.xz', 'updateinfo\.xml\.xz',
-                              'prestodelta\.xml\.xz']
-        self.zsync_download = ['primary\.xml\.gz', 'filelists\.xml\.gz']
+        self.download = [('comps.*\.xz', False), ('updateinfo\.xml\.xz', False),
+                         ('prestodelta\.xml\.xz', False), ('primary\.xml\.gz',
+                         True), ('filelists\.xml\.gz', True)]
 
     def download_repomd(self):
         " May throw if repomd.xml does not exists at server "
@@ -46,12 +46,14 @@ class PluginImpl(object):
         else:
             return file_name
 
-    def download_wget_file(self, file):
+    def download_wget(self, file):
         try:
             check_call(['wget', self.mtdt_url + file, '-O', self._cache_dir +
                         '/repodata/' + file], stdout=DEVNULL, stderr=DEVNULL)
         except CalledProcessError as ex:
             logger.debug(str(ex))
+            return 1
+        return 0
 
     def save_repomd(self, repomd):
         with open(self._cache_dir + '/repodata/repomd.xml', 'w') as repomd_f:
@@ -65,35 +67,34 @@ class PluginImpl(object):
         repomd = self.download_repomd()
 
         if not os.path.exists(cache_dir):
-                os.makedirs(cache_dir)
-                os.makedirs(cache_dir + '/repodata')
-                for file in self.wget_download:
-                    self.download_wget_file(self.get_input_name(repomd, file))
-                for file in self.zsync_download:
-                    self.download_wget_file(self.get_input_name(repomd, file))
-                self.save_repomd(repomd)
-                return
+            os.makedirs(cache_dir)
+            os.makedirs(cache_dir + '/repodata')
+            for file in self.download:
+                self.download_wget(self.get_input_name(repomd, file[0]))
+            self.save_repomd(repomd)
+            return
+
         local_repomd = self.load_local_repomd()
         cwd = os.getcwd()
         os.chdir(cache_dir + '/repodata')
 
-        for file in self.wget_download:
-            new_file = self.get_input_name(repomd, file)
-            old_file = self.get_input_name(local_repomd, file)
+        for file in self.download:
+            new_file = self.get_input_name(repomd, file[0])
+            old_file = self.get_input_name(local_repomd, file[0])
             if new_file.find(old_file) != 0:
-                if (os.path.isfile(cache_dir + '/repodata/' + old_file)):
-                    os.remove(cache_dir + '/repodata/' + old_file)
-                self.download_wget_file(new_file)
-
-        for file in self.zsync_download:
-            new_file = self.get_input_name(repomd, file)
-            old_file = self.get_input_name(local_repomd, file)
-            if new_file.find(old_file) != 0:
-                self._sync(
-                    self.mtdt_url + self.remove_file_ext(new_file) + '.zsync',
-                    cache_dir + '/repodata/' + old_file,
-                    cache_dir + '/repodata/' + new_file
-                )
+                # second item of touple represent to synchronize or download
+                if file[1]:
+                    if self._sync(
+                        self.mtdt_url + self.remove_file_ext(new_file) +
+                        '.zsync', cache_dir + '/repodata/' + old_file,
+                            cache_dir + '/repodata/' + new_file) == 0:
+                        # if zsync success, it can download next file
+                        continue
+                else:
+                    if os.path.isfile(cache_dir + '/repodata/' + old_file):
+                        os.remove(cache_dir + '/repodata/' + old_file)
+                if self.download_wget(new_file) != 0:
+                    return
 
         self.save_repomd(repomd)
         os.chdir(cwd)
@@ -110,6 +111,7 @@ class PluginImpl(object):
             if zsync.returncode or self.print_log:
                 logger.debug(outputs[1].decode('utf-8'))
                 logger.debug(outputs[0].decode('utf-8'))
+                check_output(['rm', '-rf', input_file + '.part'])
         except CalledProcessError as ex:
             logger.debug(str(ex))
             # reverse rewriting existing if there was any
