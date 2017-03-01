@@ -70,8 +70,7 @@ class PluginImpl(object):
                         '/repodata/' + file], stdout=DEVNULL, stderr=DEVNULL)
         except CalledProcessError as ex:
             logger.debug(str(ex))
-            return 1
-        return 0
+            raise ex
 
     def save_repomd(self, repomd):
         with open(self._cache_dir + '/repodata/repomd.xml', 'w') as repomd_f:
@@ -103,16 +102,21 @@ class PluginImpl(object):
                 # second item of touple represent to synchronize or download
                 self.backup_files()
                 if file[1]:
-                    if self._sync(
-                        self.mtdt_url + self.remove_file_ext(new_file) +
-                        '.zsync', cache_dir + '/repodata/' + old_file,
-                            cache_dir + '/repodata/' + new_file) == 0:
+                    try:
+                        self._sync(
+                            self.mtdt_url + self.remove_file_ext(new_file) +
+                            '.zsync', cache_dir + '/repodata/' + old_file,
+                            cache_dir + '/repodata/' + new_file)
                         # if zsync success, it can download next file
                         continue
+                    except:
+                        pass
                 else:
                     if os.path.isfile(cache_dir + '/repodata/' + old_file):
                         os.remove(cache_dir + '/repodata/' + old_file)
-                if self.download_wget(new_file) != 0:
+                try:
+                    self.download_wget(new_file)
+                except CalledProcessError:
                     # if wget fails, restore old metadata
                     self.restore_files()
                     return
@@ -126,7 +130,6 @@ class PluginImpl(object):
         # if file that will be synced does not exists, this should be aborted
         command = '{print($0); if (match($0,/###################- 100.0% ' + \
                   '0.0 kBps/)) { i++; if (i == 2) exit(1); }}'
-        rc = 0
         if not os.path.isfile(input_file):
             check_output(['touch', input_file])
         try:
@@ -136,8 +139,8 @@ class PluginImpl(object):
             outputs = awk.communicate()
             if zsync.returncode or awk.returncode or self.print_log:
                 logger.debug(outputs[0].decode('utf-8'))
-                check_output(['rm', '-rf', input_file + '.part'])
-                rc = 1
+                os.remove(input_file + '.part')
+                raise Exception()
         except CalledProcessError as ex:
             logger.debug(str(ex))
             # reverse rewriting existing if there was any
@@ -145,6 +148,7 @@ class PluginImpl(object):
                 check_output(['mv', target + '.zs-old', target])
             except:
                 pass
+            raise Exception()
         else:
             # cleanup
             check_output(['rm', '-rf', target + '.zs-old',
