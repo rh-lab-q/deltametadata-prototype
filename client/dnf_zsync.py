@@ -5,7 +5,7 @@ from subprocess import STDOUT, PIPE, DEVNULL, CalledProcessError, Popen,\
 import dnf
 import logging
 import tempfile
-from shutil import copytree, ignore_patterns, rmtree, move
+from shutil import copyfile, rmtree, move
 
 logger = logging.getLogger("dnf")
 
@@ -42,9 +42,12 @@ class PluginImpl(object):
 
     def backup_files(self):
         if self._backup_dir is None:
-            with tempfile.TemporaryDirectory() as tmpfile:
-                self._backup_dir = tmpfile
-            copytree(self._cache_dir + '/repodata/', self._backup_dir)
+            self._backup_dir = tempfile.mkdtemp()
+            src_path = self._cache_dir + "/repodata"
+            for file in os.listdir(src_path):
+                srcfile = os.path.join(src_path, file)
+                dstfile = os.path.join(self._backup_dir, file)
+                copyfile(srcfile, dstfile)
 
     def restore_files(self):
         rmtree(self._cache_dir + '/repodata/')
