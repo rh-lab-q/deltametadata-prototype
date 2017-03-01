@@ -1,6 +1,7 @@
 import os
 import re
-from subprocess import PIPE, DEVNULL, CalledProcessError, Popen, check_output, check_call
+from subprocess import STDOUT, PIPE, DEVNULL, CalledProcessError, Popen,\
+                       check_output, check_call
 import dnf
 import logging
 import tempfile
@@ -42,7 +43,7 @@ class PluginImpl(object):
     def backup_files(self):
         if self._backup_dir is None:
             with tempfile.TemporaryDirectory() as tmpfile:
-                self._backup_dir = tmpfile;
+                self._backup_dir = tmpfile
             copytree(self._cache_dir + '/repodata/', self._backup_dir)
 
     def restore_files(self):
@@ -123,16 +124,20 @@ class PluginImpl(object):
     def _sync(self, url, input_file, target):
         " this is exception safe (unless something unexpected will happen) "
         # if file that will be synced does not exists, this should be aborted
+        command = '{print($0); if (match($0,/###################- 100.0% ' + \
+                  '0.0 kBps/)) { i++; if (i == 2) exit(1); }}'
+        rc = 0
         if not os.path.isfile(input_file):
             check_output(['touch', input_file])
         try:
             zsync = Popen(['zsync', url, '-i', input_file, '-o',
-                           target], stdout=PIPE, stderr=PIPE)
-            outputs = zsync.communicate()
-            if zsync.returncode or self.print_log:
-                logger.debug(outputs[1].decode('utf-8'))
+                           target], stdout=PIPE, stderr=STDOUT)
+            awk = Popen(['awk', command], stdin=zsync.stdout, stdout=PIPE)
+            outputs = awk.communicate()
+            if zsync.returncode or awk.returncode or self.print_log:
                 logger.debug(outputs[0].decode('utf-8'))
                 check_output(['rm', '-rf', input_file + '.part'])
+                rc = 1
         except CalledProcessError as ex:
             logger.debug(str(ex))
             # reverse rewriting existing if there was any
@@ -144,7 +149,7 @@ class PluginImpl(object):
             # cleanup
             check_output(['rm', '-rf', target + '.zs-old',
                           input_file if input_file != target else ''])
-        return zsync.returncode
+        return rc
 
 
 class Plugin(dnf.Plugin):
