@@ -3,6 +3,8 @@ import re
 from subprocess import PIPE, DEVNULL, CalledProcessError, Popen, check_output, check_call
 import dnf
 import logging
+import tempfile
+from shutil import copytree, ignore_patterns, rmtree, move
 
 logger = logging.getLogger("dnf")
 
@@ -12,6 +14,7 @@ class PluginImpl(object):
     def __init__(self, mtdt_url, print_log=False):
         self.mtdt_url = mtdt_url
         self._cache_dir = None
+        self._backup_dir = None
         self.print_log = print_log
         self.download = [('comps.*\.xz', False), ('updateinfo\.xml\.xz', False),
                          ('prestodelta\.xml\.xz', False), ('primary\.xml\.gz',
@@ -35,6 +38,20 @@ class PluginImpl(object):
     def repodata_base_name(self, s):
         " strips hash like this: [0-9a-f]+-(.+) -> \1 "
         return s.split('-')[1]
+
+    def backup_files(self):
+        if self._backup_dir is None:
+            with tempfile.TemporaryDirectory() as tmpfile:
+                self._backup_dir = tmpfile;
+            copytree(self._cache_dir + '/repodata/', self._backup_dir)
+
+    def restore_files(self):
+        rmtree(self._cache_dir + '/repodata/')
+        move(self._backup_dir, self._cache_dir + '/repodata/')
+
+    def clean_backup_files(self):
+        if self._backup_dir is not None:
+            rmtree(self._backup_dir)
 
     def get_input_name(self, repomd, file_name):
         if repomd:
@@ -83,6 +100,7 @@ class PluginImpl(object):
             old_file = self.get_input_name(local_repomd, file[0])
             if new_file.find(old_file) != 0:
                 # second item of touple represent to synchronize or download
+                self.backup_files()
                 if file[1]:
                     if self._sync(
                         self.mtdt_url + self.remove_file_ext(new_file) +
@@ -94,9 +112,12 @@ class PluginImpl(object):
                     if os.path.isfile(cache_dir + '/repodata/' + old_file):
                         os.remove(cache_dir + '/repodata/' + old_file)
                 if self.download_wget(new_file) != 0:
+                    # if wget fails, restore old metadata
+                    self.restore_files()
                     return
 
         self.save_repomd(repomd)
+        self.clean_backup_files()
         os.chdir(cwd)
 
     def _sync(self, url, input_file, target):
