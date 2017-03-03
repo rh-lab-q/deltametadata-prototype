@@ -6,6 +6,7 @@ import dnf
 import logging
 import tempfile
 from shutil import copyfile, rmtree, move
+from fcntl import fcntl, F_GETFL, F_SETFL
 
 logger = logging.getLogger("dnf")
 
@@ -82,6 +83,41 @@ class PluginImpl(object):
     def remove_file_ext(self, file_name):
         return file_name[:file_name.rfind('.')]
 
+    def async_read(self, process):
+        output = []
+        characters = []
+        pattern = '###################- 100.0% 0.0 kBps'
+        pattern_repeat = 0
+
+        # set non-blocking flag while preserving old flags
+        fl = fcntl(process.stdout, F_GETFL)
+        fcntl(process.stdout, F_SETFL, fl | os.O_NONBLOCK)
+        # read char until EOF hit
+        while True:
+            try:
+                ch = os.read(process.stdout.fileno(), 1)
+                # EOF
+                if not ch:
+                    break
+                ch = ch.decode('UTF-8')
+                characters.append(ch)
+                # New line - check the pattern and add to output string
+                if ch == '\n':
+                    string = "".join(characters)
+                    if (string.find(pattern) != -1):
+                        pattern_repeat += 1
+                        if (pattern_repeat == 2):
+                            # zsync is in loop (bug)
+                            Popen.kill(process)
+                            break
+                    output.append(string)
+                    characters = []
+            except OSError:
+                # waiting for data be available on process.stdout
+                pass
+        return "".join(output)
+
+
     def sync_metadata(self, cache_dir):
         self._cache_dir = cache_dir
         repomd = self.download_repomd()
@@ -105,15 +141,12 @@ class PluginImpl(object):
                 # second item of touple represent to synchronize or download
                 self.backup_files()
                 if file[1]:
-                    try:
-                        self._sync(
-                            self.mtdt_url + self.remove_file_ext(new_file) +
-                            '.zsync', cache_dir + '/repodata/' + old_file,
-                            cache_dir + '/repodata/' + new_file)
+                    if self._sync(
+                        self.mtdt_url + self.remove_file_ext(new_file) +
+                        '.zsync', cache_dir + '/repodata/' + old_file,
+                            cache_dir + '/repodata/' + new_file) == 0:
                         # if zsync success, it can download next file
                         continue
-                    except:
-                        pass
                 else:
                     if os.path.isfile(cache_dir + '/repodata/' + old_file):
                         os.remove(cache_dir + '/repodata/' + old_file)
@@ -131,19 +164,19 @@ class PluginImpl(object):
     def _sync(self, url, input_file, target):
         " this is exception safe (unless something unexpected will happen) "
         # if file that will be synced does not exists, this should be aborted
-        command = '{print($0); if (match($0,/###################- 100.0% ' + \
-                  '0.0 kBps/)) { i++; if (i == 2) exit(1); }}'
+        rc = 0
         if not os.path.isfile(input_file):
             check_output(['touch', input_file])
         try:
             zsync = Popen(['zsync', url, '-i', input_file, '-o',
                            target], stdout=PIPE, stderr=STDOUT)
-            awk = Popen(['awk', command], stdin=zsync.stdout, stdout=PIPE)
-            outputs = awk.communicate()
-            if zsync.returncode or awk.returncode or self.print_log:
-                logger.debug(outputs[0].decode('utf-8'))
+            outputs = self.async_read(zsync)
+            if zsync.returncode:
+                logger.debug(outputs)
                 os.remove(input_file + '.part')
-                raise Exception()
+                rc = 1
+            if self.print_log:
+                logger.debug(outputs)
         except CalledProcessError as ex:
             logger.debug(str(ex))
             # reverse rewriting existing if there was any
@@ -151,7 +184,6 @@ class PluginImpl(object):
                 check_output(['mv', target + '.zs-old', target])
             except:
                 pass
-            raise Exception()
         else:
             # cleanup
             check_output(['rm', '-rf', target + '.zs-old',
