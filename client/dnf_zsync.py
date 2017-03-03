@@ -4,7 +4,7 @@ from subprocess import STDOUT, PIPE, DEVNULL, CalledProcessError, Popen,\
                        check_output, check_call
 import dnf
 import logging
-import tempfile
+from tempfile import mkdtemp
 from shutil import copyfile, rmtree, move
 from fcntl import fcntl, F_GETFL, F_SETFL
 
@@ -43,7 +43,7 @@ class PluginImpl(object):
 
     def backup_files(self):
         if self._backup_dir is None:
-            self._backup_dir = tempfile.mkdtemp()
+            self._backup_dir = mkdtemp()
             src_path = self._cache_dir + "/repodata"
             for file in os.listdir(src_path):
                 srcfile = os.path.join(src_path, file)
