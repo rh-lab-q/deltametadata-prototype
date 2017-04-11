@@ -18,8 +18,8 @@ class PluginImpl(object):
         self._cache_dir = None
         self._backup_dir = None
         self.print_log = print_log
-        self.download = [('comps.*\.xz', False), ('updateinfo\.xml\.xz', False),
-                         ('prestodelta\.xml\.xz', False), ('primary\.xml\.gz',
+        self.download = [('comps.*\.(gz|xz)', False), ('updateinfo\.xml\.(gz|xz)', False),
+                         ('prestodelta\.xml\.(gz|xz)', False), ('primary\.xml\.gz',
                          True), ('filelists\.xml\.gz', True)]
 
     def download_repomd(self):
@@ -60,11 +60,9 @@ class PluginImpl(object):
 
     def get_input_name(self, repomd, file_name):
         if repomd:
-            return re.search(
-                r'<location href=\"repodata/(.*' +
-                file_name + r')\"',
-                repomd
-            ).group(1)
+            regex = re.search(r'<location href=\"repodata/(.*' + file_name +
+                              r')\"', repomd)
+            return regex.group(1) if regex is not None else file_name
         else:
             return file_name
 
@@ -117,7 +115,6 @@ class PluginImpl(object):
                 pass
         return "".join(output)
 
-
     def sync_metadata(self, cache_dir):
         self._cache_dir = cache_dir
         repomd = self.download_repomd()
@@ -126,7 +123,8 @@ class PluginImpl(object):
             os.makedirs(cache_dir)
             os.makedirs(cache_dir + '/repodata')
             for file in self.download:
-                self.download_wget(self.get_input_name(repomd, file[0]))
+                if self.get_input_name(repomd, file[0]) != file[0]:
+                    self.download_wget(self.get_input_name(repomd, file[0]))
             self.save_repomd(repomd)
             return
 
@@ -199,7 +197,8 @@ class Plugin(dnf.Plugin):
         super(Plugin, self).__init__(base, cli)
         self.cli = cli
         self.base = base
-        self.impl = PluginImpl('http://209.132.178.35/local/')
+        self.impl = PluginImpl('http://209.132.178.35/' + base.conf.releasever +
+                               '/')
 
     def config(self):
         if self.cli:
